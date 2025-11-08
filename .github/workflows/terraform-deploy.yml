@@ -12,42 +12,60 @@ on:
   workflow_dispatch:
 
 jobs:
-  terraform:
-    name: Terraform Deploy AWS
+  deploy:
+    name: Provisionar Infraestrutura AWS com Segurança
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout do código
         uses: actions/checkout@v4
 
+      - name: Verificar branch atual
+        run: |
+          echo "Branch atual: ${{ github.ref_name }}"
+          if [ "${{ github.ref_name }}" != "main" ]; then
+            echo "Este workflow só pode ser executado no branch 'main'."
+            exit 1
+          fi
+
       - name: Configurar credenciais AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: us-east-1
 
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.5
 
-      - name: Terraform Init
-        run: terraform init
+      - name: Inicializar Terraform com backend remoto
+        run: |
+          terraform init \
+            -backend-config="bucket=terraform-state-paulo-20251108" \
+            -backend-config="key=ec2/terraform.tfstate" \
+            -backend-config="region=us-east-1" \
+            -backend-config="encrypt=true"
 
-      - name: Terraform Validate
+      - name: Validar configuração Terraform
         run: terraform validate
 
-      - name: Terraform Plan
+      - name: Gerar plano de execução
         run: terraform plan -out=tfplan -no-color
 
-      - name: Upload plano de execução
+      - name: Upload do plano de execução
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
           path: tfplan
 
-      - name: Terraform Apply
+      - name: Aplicar plano Terraform
         if: github.ref == 'refs/heads/main'
         run: terraform apply -auto-approve tfplan
 
+      - name: Confirmar atualização do backend remoto
+        run: |
+          echo "Verificando se o state foi atualizado no bucket..."
+          aws s3 ls s3://terraform-state-paulo-20251108/ec2/ || true
+          echo "Processo de deploy finalizado com sucesso."

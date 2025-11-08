@@ -1,3 +1,4 @@
+
 variable "vpc_id" {
     default = "vpc-0d7addae06ac555fc"    # Your VPC Default ID
 }
@@ -25,7 +26,7 @@ resource "aws_instance" "ecommerce" {
 }
 
 resource "aws_security_group" "allow_ssh_http" {
-  name        = "allow_ssh_http"
+  name        = "allow_ssh_httpp"
   description = "Allow SSH and HTTP traffic on EC2 instance"
   vpc_id      = var.vpc_id
 
