@@ -5,15 +5,13 @@ on:
 
 jobs:
   setup-backend:
-    name: Criar Backend S3 e Migrar Estado
+    name: Criar Bucket S3 e migrar estado
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout do repositório
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      # Configurar credenciais AWS
       - name: Configurar credenciais AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -21,47 +19,71 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      # Instalar Terraform
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.5
 
-      # Inicializar Terraform
-      - name: Terraform Init
-        run: terraform init
-
-      # Criar Bucket S3 (backend)
-      - name: Criar Bucket S3
-        run: terraform apply -auto-approve backend-s3.tf
-
-      # Gerar arquivo provider.tf
-      - name: Criar arquivo provider.tf
+      - name: Criar arquivo backend-s3.tf (bootstrap)
         run: |
-          echo 'terraform {
+          mkdir -p bootstrap
+          cat > bootstrap/backend-s3.tf <<'EOF'
+          provider "aws" {
+            region = "us-east-1"
+          }
+
+          resource "aws_s3_bucket" "terraform_state" {
+            bucket = "terraform-state-paulo"
+            force_destroy = false
+            tags = {
+              Name        = "terraform-state-paulo"
+              Environment = "infra"
+            }
+          }
+
+          resource "aws_s3_bucket_versioning" "versioning" {
+            bucket = aws_s3_bucket.terraform_state.id
+            versioning_configuration { status = "Enabled" }
+          }
+
+          resource "aws_s3_bucket_server_side_encryption_configuration" "encrypt" {
+            bucket = aws_s3_bucket.terraform_state.id
+            rule {
+              apply_server_side_encryption_by_default { sse_algorithm = "AES256" }
+            }
+          }
+          EOF
+
+      - name: Terraform Init (bootstrap)
+        run: terraform -chdir=bootstrap init
+
+      - name: Terraform Apply (criar bucket)
+        run: terraform -chdir=bootstrap apply -auto-approve
+
+      - name: Criar provider.tf com backend S3 (raiz)
+        run: |
+          cat > provider.tf <<'EOF'
+          terraform {
             required_version = ">= 1.6.0"
             required_providers {
-              aws = {
-                source  = "hashicorp/aws"
-                version = "~> 5.0"
-              }
+              aws = { source = "hashicorp/aws", version = "~> 5.0" }
             }
             backend "s3" {
-              bucket = "terraform-state-paulo"
-              key    = "ec2/terraform.tfstate"
-              region = "us-east-1"
+              bucket  = "terraform-state-paulo"
+              key     = "ec2/terraform.tfstate"
+              region  = "us-east-1"
               encrypt = true
             }
           }
 
           provider "aws" {
-            region = "us-east-1"
-          }' > provider.tf
+            region = var.region
+          }
+          EOF
 
-      # Migrar estado local para S3
-      - name: Migrar estado local para o backend remoto
+      - name: Migrar state local para o backend S3
         run: terraform init -migrate-state -input=false
 
-      # Validar backend
       - name: Validar backend remoto
-        run: terraform state list || echo "Nenhum recurso encontrado"
+        run: terraform state list || echo "Nenhum recurso no state (ok para 1ª migração)"
+

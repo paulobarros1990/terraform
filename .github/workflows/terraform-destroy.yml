@@ -1,19 +1,22 @@
 name: Terraform Destroy
 
 on:
-  workflow_dispatch:  # Executa apenas quando acionado manualmente pelo GitHub
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Digite YES para confirmar a destruição dos recursos"
+        required: true
+        default: "NO"
 
 jobs:
   destroy:
-    name: Destroy Infra AWS
+    name: Destruir Infra AWS
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout do código
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      # Configurar credenciais AWS
       - name: Configurar credenciais AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -21,20 +24,21 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # Instalar Terraform
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.5
 
-      # Inicializar Terraform
       - name: Terraform Init
         run: terraform init
 
-      # Plano de destruição (para revisar logs)
-      - name: Terraform Plan Destroy
-        run: terraform plan -destroy -no-color
+      - name: Mostrar estado atual
+        run: terraform state list || echo "Nenhum recurso encontrado."
 
-      # Executar destruição
+      - name: Terraform Plan Destroy
+        run: terraform plan -destroy -out=tfplan -no-color
+
       - name: Terraform Destroy
+        if: ${{ github.event.inputs.confirm == 'YES' }}
         run: terraform destroy -auto-approve -no-color
+

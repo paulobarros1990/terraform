@@ -1,26 +1,25 @@
-name: Terraform Deploy - AWS
+name: Terraform Deploy
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
+    paths:
+      - '**.tf'
+      - '**.tfvars'
+      - 'modules/**'
+      - '!**/.github/**'
   workflow_dispatch:
-
-env:
-  AWS_REGION: us-east-1
 
 jobs:
   terraform:
-    name: Terraform Deploy
+    name: Terraform Deploy AWS
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout do repositório
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      # Configurar credenciais da AWS
       - name: Configurar credenciais AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -28,33 +27,27 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # Instalar Terraform
       - name: Instalar Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.5
 
-      # Inicializar Terraform
-      - name: terraform init
+      - name: Terraform Init
         run: terraform init
 
-      # Validar sintaxe
-      - name: terraform validate
+      - name: Terraform Validate
         run: terraform validate
 
-      # Gerar plano de execução
-      - name: terraform plan
-        id: plan
-        run: terraform plan -no-color -out=tfplan
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan -no-color
 
-      # Salvar plano como artefato
       - name: Upload plano de execução
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
           path: tfplan
 
-      # Aplicar alterações (somente em push na branch main)
-      - name: terraform apply
+      - name: Terraform Apply
         if: github.ref == 'refs/heads/main'
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve tfplan
+
