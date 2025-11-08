@@ -1,11 +1,11 @@
 name: Terraform Backend Setup
 
 on:
-  workflow_dispatch:  # Execução manual
+  workflow_dispatch:
 
 jobs:
   setup-backend:
-    name: Criar Bucket S3 e migrar estado
+    name: Criar ou usar Bucket S3 e migrar estado
     runs-on: ubuntu-latest
 
     steps:
@@ -24,50 +24,38 @@ jobs:
         with:
           terraform_version: 1.9.5
 
-      - name: Criar arquivo backend-s3.tf (bootstrap)
+      - name: Criar bucket S3 se não existir
         run: |
-          mkdir -p bootstrap
-          cat > bootstrap/backend-s3.tf <<'EOF'
-          provider "aws" {
-            region = "us-east-1"
-          }
+          echo "Verificando se o bucket terraform-state-paulo já existe..."
+          if aws s3api head-bucket --bucket terraform-state-paulo 2>/dev/null; then
+            echo "Bucket terraform-state-paulo já existe, pulando criação."
+          else
+            echo "Criando bucket terraform-state-paulo..."
+            aws s3api create-bucket \
+              --bucket terraform-state-paulo \
+              --region us-east-1 \
+              --create-bucket-configuration LocationConstraint=us-east-1
+            aws s3api put-bucket-versioning \
+              --bucket terraform-state-paulo \
+              --versioning-configuration Status=Enabled
+            aws s3api put-bucket-encryption \
+              --bucket terraform-state-paulo \
+              --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+          fi
 
-          resource "aws_s3_bucket" "terraform_state" {
-            bucket = "terraform-state-paulo"
-            force_destroy = false
-            tags = {
-              Name        = "terraform-state-paulo"
-              Environment = "infra"
-            }
-          }
-
-          resource "aws_s3_bucket_versioning" "versioning" {
-            bucket = aws_s3_bucket.terraform_state.id
-            versioning_configuration { status = "Enabled" }
-          }
-
-          resource "aws_s3_bucket_server_side_encryption_configuration" "encrypt" {
-            bucket = aws_s3_bucket.terraform_state.id
-            rule {
-              apply_server_side_encryption_by_default { sse_algorithm = "AES256" }
-            }
-          }
-          EOF
-
-      - name: Terraform Init (bootstrap)
-        run: terraform -chdir=bootstrap init
-
-      - name: Terraform Apply (criar bucket)
-        run: terraform -chdir=bootstrap apply -auto-approve
-
-      - name: Criar provider.tf com backend S3 (raiz)
+      - name: Criar provider.tf com backend S3
         run: |
           cat > provider.tf <<'EOF'
           terraform {
             required_version = ">= 1.6.0"
+
             required_providers {
-              aws = { source = "hashicorp/aws", version = "~> 5.0" }
+              aws = {
+                source  = "hashicorp/aws"
+                version = "~> 5.0"
+              }
             }
+
             backend "s3" {
               bucket  = "terraform-state-paulo"
               key     = "ec2/terraform.tfstate"
@@ -77,7 +65,7 @@ jobs:
           }
 
           provider "aws" {
-            region = var.region
+            region = "us-east-1"
           }
           EOF
 
