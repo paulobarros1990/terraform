@@ -26,20 +26,21 @@ jobs:
 
       - name: Criar bucket S3 se não existir
         run: |
-          echo "Verificando se o bucket terraform-state-paulo já existe..."
-          if aws s3api head-bucket --bucket terraform-state-paulo 2>/dev/null; then
-            echo "Bucket terraform-state-paulo já existe, pulando criação."
+          BUCKET_NAME="terraform-state-paulo-20251108"
+          echo "Verificando se o bucket $BUCKET_NAME já existe..."
+          if aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+            echo "Bucket $BUCKET_NAME já existe, pulando criação."
           else
-            echo "Criando bucket terraform-state-paulo..."
+            echo "Criando bucket $BUCKET_NAME..."
             aws s3api create-bucket \
-              --bucket terraform-state-paulo \
+              --bucket "$BUCKET_NAME" \
               --region us-east-1 \
               --create-bucket-configuration LocationConstraint=us-east-1
             aws s3api put-bucket-versioning \
-              --bucket terraform-state-paulo \
+              --bucket "$BUCKET_NAME" \
               --versioning-configuration Status=Enabled
             aws s3api put-bucket-encryption \
-              --bucket terraform-state-paulo \
+              --bucket "$BUCKET_NAME" \
               --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
           fi
 
@@ -57,7 +58,7 @@ jobs:
             }
 
             backend "s3" {
-              bucket  = "terraform-state-paulo"
+              bucket  = "terraform-state-paulo-20251108"
               key     = "ec2/terraform.tfstate"
               region  = "us-east-1"
               encrypt = true
