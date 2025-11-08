@@ -1,0 +1,40 @@
+# =======================================
+# Terraform .gitignore otimizado
+# =======================================
+
+# Diretórios locais do Terraform
+.terraform/
+.terraform.lock.hcl
+
+# Arquivos de estado (contêm dados sensíveis)
+terraform.tfstate
+terraform.tfstate.backup
+
+# Planos de execução temporários
+*.tfplan
+
+# Arquivos de variáveis locais (não versionar segredos)
+*.tfvars
+*.tfvars.json
+
+# Logs e saídas temporárias
+crash.log
+*.log
+
+# Arquivos de override e testes locais
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Backup e arquivos temporários de editores
+*.bak
+*.swp
+*.tmp
+*~
+
+# Arquivos de output específicos de módulos
+**/terraform.tfstate
+**/terraform.tfstate.backup
+**/.terraform/
+
