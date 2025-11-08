@@ -1,0 +1,60 @@
+name: Terraform Deploy - AWS
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  terraform:
+    name: Terraform Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout do repositório
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      # Configurar credenciais da AWS
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # Instalar Terraform
+      - name: Instalar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
+
+      # Inicializar Terraform
+      - name: terraform init
+        run: terraform init
+
+      # Validar sintaxe
+      - name: terraform validate
+        run: terraform validate
+
+      # Gerar plano de execução
+      - name: terraform plan
+        id: plan
+        run: terraform plan -no-color -out=tfplan
+
+      # Salvar plano como artefato
+      - name: Upload plano de execução
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: tfplan
+
+      # Aplicar alterações (somente em push na branch main)
+      - name: terraform apply
+        if: github.ref == 'refs/heads/main'
+        run: terraform apply -auto-approve
